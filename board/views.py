@@ -2,24 +2,23 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from article.models import User, Article
-from django.http import JsonResponse # JSON 응답
-from map.models import Point
-from django.forms.models import model_to_dict
+
 
 def index(request):
     return render(request, 'index.html')
 
 def signup(request):
+    # 실제 DB에 데이터를 저장(회원가입)
     if request.method == 'POST':
-        # 회원정보 저장
+    # 회원정보 저장
         email = request.POST.get('email')
         name = request.POST.get('name')
         pwd = request.POST.get('pwd')
         user = User(email=email, name=name, pwd=pwd)
         user.save()
         return HttpResponseRedirect('/index/')
-   
-    # 회원가입을 위한 양식(HTML) 전송
+
+    # 회원가입을 위한 양식(html) 전송
     return render(request, 'signup.html')
 
 def signin(request):
@@ -28,7 +27,7 @@ def signin(request):
         email = request.POST.get('email')
         pwd = request.POST.get('pwd')
         try:
-            # select * from user where email=? and pwd=?
+        # select * from user where email=? and pwd=?
             user = User.objects.get(email=email, pwd=pwd)
             request.session['email'] = email
             return render(request, 'signin_success.html')
@@ -37,31 +36,34 @@ def signin(request):
     return render(request, 'signin.html')
 
 def signout(request):
-    del request.session['email'] # 개별 삭제
-    request.session.flush() # 전체 삭제
+    del request.session['email'] #개별 삭제
+    request.session.flush()      #전체 삭제
+    
     return HttpResponseRedirect('/index/')
 
 def write(request):
     if request.method == 'POST':
         title = request.POST.get('title')
         content = request.POST.get('content')
-
+        
         try:
             email = request.session['email']
 
             # select * from user where email = ?
             user = User.objects.get(email=email)
 
-            # insert into article (title, content, user_id) values (?, ?, ?)
-            article = Article(title=title, content=content, user=user)
+            #insert into article (title, content, user_id) values (?,?,?)
+            article = Article(title=title, content = content, user = user)
             article.save()
             return render(request, 'write_success.html')
         except:
             return render(request, 'write_fail.html')
+
     return render(request, 'write.html')
 
+
 def list(request):
-    # select * from article order by id desc
+# select * from article order by id desc
     article_list = Article.objects.order_by('-id')
     context = {
         'article_list' : article_list
@@ -69,7 +71,7 @@ def list(request):
     return render(request, 'list.html', context)
 
 def detail(request, id):
-    # select * from article where id = ?
+# select * from article where id = ?
     article = Article.objects.get(id=id)
     context = {
         'article' : article
@@ -79,7 +81,6 @@ def detail(request, id):
 def update(request, id):
     # select * from article where id = ?
     article = Article.objects.get(id=id)
-
     if request.method == 'POST':
         title = request.POST.get('title')
         content = request.POST.get('content')
@@ -87,23 +88,31 @@ def update(request, id):
             # update article set title = ?, content = ? where id = ?
             article.title = title
             article.content = content
-            article.save()
+            article.save()      # DB에 저장
             return render(request, 'update_success.html')
         except:
             return render(request, 'update_fail.html')
     context = {
         'article' : article
     }
-    return render(request, 'update.html', context)
+    return render(request, 'update.html', context)  
+
 
 def delete(request, id):
     try:
         # select * from article where id = ?
         article = Article.objects.get(id=id)
+        article.delete()    # DB에서 삭제
         return render(request, 'delete_success.html')
     except:
         return render(request, 'delete_fail.html')
 
+def map(request):
+    return render(request, 'map.html')
+
+from django.http import JsonResponse # JSON 응답
+from map.models import Point
+from django.forms.models import model_to_dict
 def map_data(request):
     data = Point.objects.all()
     lat = request.GET.get('lat')
@@ -111,7 +120,26 @@ def map_data(request):
     map_list = []
     for d in data:
         d = model_to_dict(d) # QuerySet -> Dict
-        map_list.append(d)
+        dist = distance(float(lat), float(lng), d['lat'], d['lng'])
+        if(dist <= 150): # 10km 이내의 장소만 응답결과로 저장
+            map_list.append(d)
     # dict가 아닌 자료는 항상 safe=False 옵션 사용
     return JsonResponse(map_list, safe=False)
 
+
+import math
+def distance(lat1, lng1, lat2, lng2) :
+    theta = lng1 - lng2
+    dist1 = math.sin(deg2rad(lat1)) * math.sin(deg2rad(lat2))
+    dist2 = math.cos(deg2rad(lat1)) * math.cos(deg2rad(lat2))
+    dist2 = dist2* math.cos(deg2rad(theta))
+    dist = dist1 + dist2
+    dist = math.acos(dist)
+    dist = rad2deg(dist) * 60 * 1.1515 * 1.609344
+    return dist
+
+def deg2rad(deg):
+    return deg * math.pi / 180.0
+
+def rad2deg(rad):
+    return rad * 180.0 / math.pi
